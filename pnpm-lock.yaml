@@ -4,10 +4,16 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  ccphone: link:../../../../../Library/pnpm/global/5/node_modules/ccphone
+
 importers:
 
   .:
     dependencies:
+      ccphone:
+        specifier: link:../../../../../Library/pnpm/global/5/node_modules/ccphone
+        version: link:../../../../../Library/pnpm/global/5/node_modules/ccphone
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
