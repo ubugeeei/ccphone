@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "ccphone": "link:../../../../../Library/pnpm/global/5/node_modules/ccphone",
-    "node-pty": "^1.1.0",
+    "node-pty": "1.2.0-beta.11",
     "qrcode-terminal": "^0.12.0",
     "ws": "^8.19.0"
   },

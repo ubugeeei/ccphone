@@ -152,16 +152,18 @@ async function main(): Promise<void> {
   })
 
   function spawnPty(name: string, cols: number, rows: number): void {
-    ptyProcess = pty.spawn("tmux", ["attach-session", "-t", name], {
-      name: "xterm-256color",
-      cols,
-      rows,
-      cwd: process.env.HOME || "/",
-      env: {
-        ...process.env,
-        TERM: "xterm-256color",
-      } as Record<string, string>,
-    })
+    ptyProcess = pty.spawn("tmux", ["attach-session", "-t", name],
+      {
+        name: "xterm-256color",
+        cols,
+        rows,
+        cwd: process.env.HOME || "/",
+        env: {
+          ...process.env,
+          TERM: "xterm-256color",
+        } as Record<string, string>,
+      },
+    )
 
     ptyProcess.onData((data: string) => {
       inputDetector.feed(data)
