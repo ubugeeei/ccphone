@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+        />
+        <title>ccphone</title>
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css"
+        />
+        <style>
+            :root {
+                --bg: #0c0c0c;
+                --surface: #161616;
+                --border: #262626;
+                --text: #d4d4d4;
+                --text-dim: #737373;
+                --accent: #a3e635;
+                --danger: #f87171;
+            }
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+                background: var(--bg);
+                overscroll-behavior: none;
+                -webkit-overflow-scrolling: none;
+            }
+            #terminal {
+                width: 100%;
+                height: 100dvh;
+                padding-top: env(safe-area-inset-top);
+                padding-left: env(safe-area-inset-left);
+                padding-right: env(safe-area-inset-right);
+                display: flex;
+                flex-direction: column;
+            }
+            #term-container {
+                flex: 1;
+                min-height: 0;
+            }
+            .xterm {
+                height: 100%;
+            }
+            #toolbar {
+                display: flex;
+                gap: 6px;
+                padding: 8px 10px;
+                padding-bottom: calc(8px + env(safe-area-inset-bottom));
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                flex-shrink: 0;
+            }
+            #toolbar button {
+                flex: 1;
+                padding: 10px 0;
+                background: transparent;
+                color: var(--text-dim);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                font-size: 13px;
+                font-weight: 500;
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                touch-action: manipulation;
+                transition: all 0.1s ease;
+            }
+            #toolbar button:active {
+                background: var(--border);
+                color: var(--text);
+                transform: scale(0.95);
+            }
+            #status {
+                position: fixed;
+                top: calc(8px + env(safe-area-inset-top, 0px));
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 6px 16px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 20px;
+                color: var(--danger);
+                text-align: center;
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+                font-size: 12px;
+                font-weight: 500;
+                letter-spacing: 0.02em;
+                z-index: 100;
+                display: none;
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+            }
+            #status.connected {
+                color: var(--accent);
+                border-color: color-mix(
+                    in srgb,
+                    var(--accent) 30%,
+                    transparent
+                );
+            }
+            @keyframes notify-pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.3;
+                }
+            }
+            #status.notify {
+                display: block !important;
+                color: var(--accent);
+                border-color: var(--accent);
+                animation: notify-pulse 1.2s ease-in-out infinite;
+            }
+            #session-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                z-index: 200;
+                background: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+            }
+            #session-overlay.open {
+                display: flex;
+                align-items: flex-end;
+            }
+            #session-panel {
+                width: 100%;
+                max-height: 60dvh;
+                background: var(--surface);
+                border-top: 1px solid var(--border);
+                border-radius: 16px 16px 0 0;
+                padding: 16px;
+                padding-bottom: calc(16px + env(safe-area-inset-bottom));
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            #session-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+            #session-panel-header span {
+                color: var(--text);
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            #session-panel-close {
+                background: transparent;
+                border: none;
+                color: var(--text-dim);
+                font-size: 20px;
+                cursor: pointer;
+                padding: 4px 8px;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .session-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px;
+                margin-bottom: 4px;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.1s ease;
+            }
+            .session-item:active {
+                background: var(--border);
+            }
+            .session-item.current {
+                border-color: color-mix(
+                    in srgb,
+                    var(--accent) 50%,
+                    transparent
+                );
+                background: color-mix(in srgb, var(--accent) 8%, transparent);
+            }
+            .session-item-name {
+                color: var(--text);
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            .session-item.current .session-item-name {
+                color: var(--accent);
+            }
+            .session-item-meta {
+                color: var(--text-dim);
+                font-family: "SF Mono", "Menlo", "Consolas", monospace;
+                font-size: 11px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="status"></div>
+        <div id="session-overlay">
+            <div id="session-panel">
+                <div id="session-panel-header">
+                    <span>Sessions</span>
+                    <button id="session-panel-close">&times;</button>
+                </div>
+                <div id="session-list"></div>
+            </div>
+        </div>
+        <div id="terminal">
+            <div id="term-container"></div>
+            <div id="toolbar">
+                <button data-key="\x1b">esc</button>
+                <button data-key="\t">tab</button>
+                <button data-key="\x03">^c</button>
+                <button data-key="\x1b[A">&uarr;</button>
+                <button data-key="\x1b[B">&darr;</button>
+                <button data-key="\x1b[D">&larr;</button>
+                <button data-key="\x1b[C">&rarr;</button>
+                <button data-key="y\r">y</button>
+                <button data-key="n\r">n</button>
+                <button id="btn-clear">clear</button>
+                <button id="btn-sessions">&#8644;</button>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+        <script>
+            (function () {
+                const statusEl = document.getElementById("status");
+                const container = document.getElementById("term-container");
+                const sessionOverlay =
+                    document.getElementById("session-overlay");
+                const sessionList = document.getElementById("session-list");
+
+                // --- Notification setup ---
+                if ("Notification" in window) {
+                    Notification.requestPermission();
+                }
+
+                var audioCtx = null;
+                function playChime() {
+                    try {
+                        if (!audioCtx)
+                            audioCtx = new (
+                                window.AudioContext || window.webkitAudioContext
+                            )();
+                        var osc = audioCtx.createOscillator();
+                        var gain = audioCtx.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.type = "sine";
+                        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                        osc.frequency.setValueAtTime(
+                            1047,
+                            audioCtx.currentTime + 0.1,
+                        );
+                        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(
+                            0.01,
+                            audioCtx.currentTime + 0.3,
+                        );
+                        osc.start(audioCtx.currentTime);
+                        osc.stop(audioCtx.currentTime + 0.3);
+                    } catch (e) {
+                        /* audio not available */
+                    }
+                }
+
+                var notifyActive = false;
+
+                function showNotify(hint) {
+                    if (notifyActive) return;
+                    notifyActive = true;
+
+                    // Status badge
+                    statusEl.textContent = hint;
+                    statusEl.className = "notify";
+
+                    // Web Notification
+                    if (
+                        "Notification" in window &&
+                        Notification.permission === "granted"
+                    ) {
+                        var n = new Notification("ccphone", {
+                            body: hint,
+                            tag: "ccphone-input",
+                            renotify: true,
+                        });
+                        n.onclick = function () {
+                            window.focus();
+                            n.close();
+                        };
+                    }
+
+                    // Vibration
+                    if (navigator.vibrate) {
+                        navigator.vibrate([200, 100, 200]);
+                    }
+
+                    // Sound
+                    playChime();
+                }
+
+                function clearNotify() {
+                    if (!notifyActive) return;
+                    notifyActive = false;
+                    statusEl.className = "";
+                    statusEl.style.display = "none";
+                }
+
+                const term = new window.Terminal({
+                    cursorBlink: true,
+                    cursorStyle: "bar",
+                    fontSize: 14,
+                    fontFamily: "'SF Mono', 'Menlo', 'Consolas', monospace",
+                    fontWeight: 400,
+                    fontWeightBold: 600,
+                    lineHeight: 1.2,
+                    letterSpacing: 0,
+                    theme: {
+                        background: "#0c0c0c",
+                        foreground: "#d4d4d4",
+                        cursor: "#a3e635",
+                        cursorAccent: "#0c0c0c",
+                        selectionBackground: "rgba(163, 230, 53, 0.15)",
+                        selectionForeground: "#ffffff",
+                        black: "#171717",
+                        red: "#f87171",
+                        green: "#a3e635",
+                        yellow: "#fbbf24",
+                        blue: "#60a5fa",
+                        magenta: "#c084fc",
+                        cyan: "#22d3ee",
+                        white: "#d4d4d4",
+                        brightBlack: "#525252",
+                        brightRed: "#fca5a5",
+                        brightGreen: "#bef264",
+                        brightYellow: "#fcd34d",
+                        brightBlue: "#93bbfd",
+                        brightMagenta: "#d8b4fe",
+                        brightCyan: "#67e8f9",
+                        brightWhite: "#fafafa",
+                    },
+                    scrollback: 5000,
+                    allowTransparency: false,
+                    convertEol: true,
+                });
+
+                const fitAddon = new window.FitAddon.FitAddon();
+                term.loadAddon(fitAddon);
+                term.open(container);
+
+                function showStatus(msg, isConnected) {
+                    statusEl.textContent = msg;
+                    statusEl.style.display = "block";
+                    statusEl.className = isConnected ? "connected" : "";
+                    if (isConnected) {
+                        setTimeout(() => {
+                            statusEl.style.display = "none";
+                        }, 2000);
+                    }
+                }
+
+                const wsProtocol =
+                    location.protocol === "https:" ? "wss:" : "ws:";
+                const token = location.pathname.slice(1);
+                let ws = null;
+                let reconnectTimer = null;
+
+                function connect() {
+                    showStatus("connecting...", false);
+                    ws = new WebSocket(
+                        `${wsProtocol}//${location.host}/ws/${token}`,
+                    );
+
+                    ws.onopen = function () {
+                        showStatus("connected", true);
+                        fitAddon.fit();
+                        const dims = fitAddon.proposeDimensions();
+                        if (dims) {
+                            ws.send(
+                                JSON.stringify({
+                                    type: "resize",
+                                    cols: dims.cols,
+                                    rows: dims.rows,
+                                }),
+                            );
+                        }
+                        term.focus();
+                    };
+
+                    ws.onmessage = function (event) {
+                        var raw = event.data;
+                        // Try parsing as JSON for control messages
+                        if (raw.charAt(0) === "{") {
+                            try {
+                                var msg = JSON.parse(raw);
+                                if (msg.type === "notify") {
+                                    showNotify(msg.hint);
+                                    return;
+                                }
+                                if (msg.type === "pong") return;
+                                if (msg.type === "sessions") {
+                                    renderSessions(msg.sessions, msg.current);
+                                    return;
+                                }
+                                if (msg.type === "switched") {
+                                    term.clear();
+                                    closeSessionPanel();
+                                    showStatus("switched: " + msg.name, true);
+                                    return;
+                                }
+                            } catch (e) {
+                                /* not JSON, fall through */
+                            }
+                        }
+                        term.write(raw);
+                    };
+
+                    ws.onclose = function () {
+                        showStatus("reconnecting...", false);
+                        scheduleReconnect();
+                    };
+
+                    ws.onerror = function () {
+                        ws.close();
+                    };
+                }
+
+                function scheduleReconnect() {
+                    if (reconnectTimer) return;
+                    reconnectTimer = setTimeout(() => {
+                        reconnectTimer = null;
+                        connect();
+                    }, 3000);
+                }
+
+                term.onData(function (data) {
+                    clearNotify();
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "input", data: data }));
+                    }
+                });
+
+                let resizeTimeout;
+                function debouncedFit() {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(function () {
+                        fitAddon.fit();
+                        const dims = fitAddon.proposeDimensions();
+                        if (dims && ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(
+                                JSON.stringify({
+                                    type: "resize",
+                                    cols: dims.cols,
+                                    rows: dims.rows,
+                                }),
+                            );
+                        }
+                    }, 150);
+                }
+
+                window.addEventListener("resize", debouncedFit);
+                if (screen.orientation) {
+                    screen.orientation.addEventListener("change", function () {
+                        setTimeout(debouncedFit, 100);
+                    });
+                }
+
+                // Adjust layout when virtual keyboard opens/closes
+                var terminalEl = document.getElementById("terminal");
+                function adjustForKeyboard() {
+                    if (window.visualViewport) {
+                        var vh = window.visualViewport.height;
+                        terminalEl.style.height = vh + "px";
+                        debouncedFit();
+                    }
+                }
+
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener(
+                        "resize",
+                        adjustForKeyboard,
+                    );
+                    window.visualViewport.addEventListener(
+                        "scroll",
+                        adjustForKeyboard,
+                    );
+                }
+
+                container.addEventListener("touchstart", function () {
+                    term.focus();
+                });
+
+                function unescapeKey(s) {
+                    return s
+                        .replace(/\\x([0-9a-fA-F]{2})/g, function (_, h) {
+                            return String.fromCharCode(parseInt(h, 16));
+                        })
+                        .replace(/\\r/g, "\r")
+                        .replace(/\\t/g, "\t")
+                        .replace(/\\n/g, "\n");
+                }
+
+                document
+                    .querySelectorAll("#toolbar button[data-key]")
+                    .forEach(function (btn) {
+                        btn.addEventListener("click", function (e) {
+                            e.preventDefault();
+                            clearNotify();
+                            var key = unescapeKey(btn.getAttribute("data-key"));
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(
+                                    JSON.stringify({
+                                        type: "input",
+                                        data: key,
+                                    }),
+                                );
+                            }
+                            term.focus();
+                        });
+                    });
+
+                // --- Session switching ---
+                function openSessionPanel() {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "list-sessions" }));
+                    }
+                }
+
+                function closeSessionPanel() {
+                    sessionOverlay.classList.remove("open");
+                }
+
+                function renderSessions(sessions, current) {
+                    sessionList.innerHTML = "";
+                    sessions.forEach(function (s) {
+                        var item = document.createElement("div");
+                        item.className =
+                            "session-item" +
+                            (s.name === current ? " current" : "");
+                        var nameEl = document.createElement("span");
+                        nameEl.className = "session-item-name";
+                        nameEl.textContent = s.name;
+                        var metaEl = document.createElement("span");
+                        metaEl.className = "session-item-meta";
+                        metaEl.textContent =
+                            s.windows +
+                            " win" +
+                            (s.windows > 1 ? "s" : "") +
+                            (s.name === current ? " (current)" : "");
+                        item.appendChild(nameEl);
+                        item.appendChild(metaEl);
+                        item.addEventListener("click", function () {
+                            if (s.name === current) {
+                                closeSessionPanel();
+                                return;
+                            }
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(
+                                    JSON.stringify({
+                                        type: "switch-session",
+                                        name: s.name,
+                                    }),
+                                );
+                            }
+                        });
+                        sessionList.appendChild(item);
+                    });
+                    sessionOverlay.classList.add("open");
+                }
+
+                document
+                    .getElementById("btn-sessions")
+                    .addEventListener("click", function (e) {
+                        e.preventDefault();
+                        openSessionPanel();
+                    });
+
+                document
+                    .getElementById("session-panel-close")
+                    .addEventListener("click", function (e) {
+                        e.preventDefault();
+                        closeSessionPanel();
+                        term.focus();
+                    });
+
+                sessionOverlay.addEventListener("click", function (e) {
+                    if (e.target === sessionOverlay) {
+                        closeSessionPanel();
+                        term.focus();
+                    }
+                });
+
+                document
+                    .getElementById("btn-clear")
+                    .addEventListener("click", function (e) {
+                        e.preventDefault();
+                        term.clear();
+                        term.focus();
+                    });
+
+                setInterval(function () {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "ping" }));
+                    }
+                }, 30000);
+
+                connect();
+            })();
+        </script>
+    </body>
+</html>
